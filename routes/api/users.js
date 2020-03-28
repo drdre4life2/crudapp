@@ -4,6 +4,9 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const keys = require('../../config/keys');
+// load input validation
+const validateRegisterInput = require('../../validation/register');
+const validateLoginInput = require('../../validation/login');
 // load user model
 const User = require('../../models/User');
 const passport = require('passport');
@@ -17,10 +20,16 @@ router.get('/test', (req,res) => res.json({msg: 'users works'}));
 // @desc Register users route
 // @access Public
 router.post('/register', (req,res) => {
+const {errors, isValid} = validateRegisterInput(req.body);
+// check validation
+if(!isValid){
+    return res.status(400).json(errors);
+}
 User.findOne({email: req.body.email})
 .then(user => {
     if(user) {
-        return res.status(400).json({email: 'User already exists'})
+        errors.email = 'User already exists'
+        return res.status(400).json(errors)
     }else {
         const avatar = gravatar.url(req.body.email,{
             s: '200', //Size 
@@ -50,6 +59,12 @@ User.findOne({email: req.body.email})
 // @desc Login users route
 // @access Public
 router.post('/login',(req,res) =>{
+
+    const {errors, isValid} = validateLoginInput(req.body);
+// check validation
+if(!isValid){
+    return res.status(400).json(errors);
+}
 const email = req.body.email;
 const password = req.body.password;
 
@@ -57,8 +72,10 @@ const password = req.body.password;
 User.findOne({email})
 .then(user => {
     //check for user
+
     if(!user){
-        return res.status(404).json({email: 'User not found'});
+        errors.email = 'User not found';
+        return res.status(404).json(errors);
     }
     //check password
     bcrypt.compare(password, user.password).then(isMatch =>{
@@ -68,7 +85,7 @@ User.findOne({email})
 
             //Sign token
             jwt.sign(payload,
-                 keys.SecreteOrKey,
+                 keys.SecretOrKey,
                   {expiresIn: 3600},
                 (err, token) =>{
                     res.json({
@@ -78,7 +95,8 @@ User.findOne({email})
 
             });
         }else{
-            return res.status(400).json({password: 'Password Incorrect'})
+            errors.password = 'Password incorrect';
+            return res.status(400).json(errors)
         }
     });
 });
@@ -90,6 +108,10 @@ User.findOne({email})
 // @access Private
 
 router.get('/current', passport.authenticate('jwt', {session: false}), (req,res) => {
-    (req,res) => res.json({message: 'success'})
+    res.json({
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email
+    });
 });
 module.exports = router;
